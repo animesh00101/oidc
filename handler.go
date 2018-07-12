@@ -186,6 +186,7 @@ func (o *Options) SignOut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var buf bytes.Buffer
+	buf.WriteString(o.LogoutURI)
 	if strings.Contains(o.LogoutURI, "?") {
 		buf.WriteByte('&')
 	} else {

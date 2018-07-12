@@ -70,7 +70,7 @@ type Options struct {
 
 // CookieOptions is the various cookie options that are configurable for the identity cookie
 type CookieOptions struct {
-	Name    string // Default: raksh
+	Name    string // Default: oidc
 	Expires time.Time
 	MaxAge  int
 	Domain  string
@@ -112,7 +112,7 @@ func DefaultOptions() Options {
 		CookieOptions: CookieOptions{
 			Name:   "oidc",
 			Path:   "/",
-			MaxAge: 60,
+			MaxAge: 60 * 60,
 		},
 
 		Config: oauth2.Config{
