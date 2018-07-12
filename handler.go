@@ -54,12 +54,17 @@ func (o *Options) SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	scheme := "https"
+	if r.TLS == nil {
+		scheme = "http"
+	}
+
 	authCodeUrl := o.Config.AuthCodeURL(
 		state,
 		oidc.Nonce(nonce),
 		oauth2.SetAuthURLParam("response_type", o.ResponseType),
 		oauth2.SetAuthURLParam("response_mode", o.ResponseMode),
-		oauth2.SetAuthURLParam("redirect_uri", fmt.Sprintf("%s://%s%s", r.URL.Scheme, r.Host, o.SignInCallbackPath)),
+		oauth2.SetAuthURLParam("redirect_uri", fmt.Sprintf("%s://%s%s", scheme, r.Host, o.SignInCallbackPath)),
 	)
 
 	http.Redirect(w, r, authCodeUrl, http.StatusFound)
@@ -163,8 +168,13 @@ func (o *Options) SignOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	scheme := "https"
+	if r.TLS == nil {
+		scheme = "http"
+	}
+
 	v := url.Values{
-		"post_logout_redirect_uri": {o.SignOutCallbackPath},
+		"post_logout_redirect_uri": {fmt.Sprintf("%s://%s%s", scheme, r.Host, o.SignOutCallbackPath)},
 		"state":                    {state},
 	}
 
@@ -197,7 +207,7 @@ func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *o
 		Value:    enc,
 		MaxAge:   o.CookieOptions.MaxAge,
 		HttpOnly: true,
-		Secure:   r.URL.Scheme == "https",
+		Secure:   r.TLS != nil,
 		Expires:  o.CookieOptions.Expires,
 		Domain:   o.CookieOptions.Domain,
 		Path:     o.CookieOptions.Path,
@@ -239,7 +249,7 @@ func (o *Options) encryptTempToCookie(w http.ResponseWriter, r *http.Request, na
 		Path:     path,
 		Domain:   o.CookieOptions.Domain,
 		MaxAge:   o.RedirectionMaxAge, // In Seconds
-		Secure:   r.URL.Scheme == "https",
+		Secure:   r.TLS != nil,
 		HttpOnly: true,
 		Expires:  time.Now().UTC().Add(time.Duration(o.RedirectionMaxAge) * time.Second),
 	})

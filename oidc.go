@@ -4,14 +4,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/coreos/go-oidc"
-	"golang.org/x/oauth2"
 	"context"
-	"github.com/gorilla/securecookie"
+	"encoding/json"
 	"log"
 	"os"
 	"strings"
-	"encoding/json"
+
+	"github.com/coreos/go-oidc"
+	"github.com/gorilla/securecookie"
+	"golang.org/x/oauth2"
 )
 
 // ResponseMode ..
@@ -91,22 +92,22 @@ func DefaultOptions() Options {
 		PostSignInRedirect:  "/",
 
 		SignInCallbackPath:  "/oidc/sign-in-oidc",
-		SignOutCallbackPath: "/oidc/sign-in-oidc",
+		SignOutCallbackPath: "/oidc/sign-out-oidc",
 
 		Codecs: securecookie.CodecsFromPairs(
-			[]byte("development-credentials-hash"),
-			[]byte("development-credentials-block"),
+			[]byte("development-credentials-hash----"),
+			[]byte("development-credentials-block---"),
 		),
 
 		TempCodec: securecookie.CodecsFromPairs(
-			[]byte("development-credentials-hash"),
-			[]byte("development-credentials-block"),
+			[]byte("development-credentials-hash----"),
+			[]byte("development-credentials-block---"),
 		)[0],
 
 		RedirectionMaxAge: 5 * 60,
 
 		ResponseMode: ResponseModeFormPost,
-		ResponseType: "id_token",
+		ResponseType: "code id_token",
 
 		CookieOptions: CookieOptions{
 			Name:   "oidc",
@@ -133,11 +134,12 @@ type authKey struct{}
 var key authKey
 
 // OpenIDConnect ...
-func OpenIDConnect(iss, clientID, clientSecret string, opts ...Option) (func(http.Handler) http.Handler, error) {
+func OpenIDConnect(iss, clientID, clientSecret string, redirectURL string, opts ...Option) (func(http.Handler) http.Handler, error) {
 	o := DefaultOptions()
 	o.Issuer = iss
 	o.Config.ClientID = clientID
 	o.Config.ClientSecret = clientSecret
+	o.Config.RedirectURL = redirectURL
 
 	for _, f := range opts {
 		f(&o)
@@ -151,7 +153,7 @@ func OpenIDConnect(iss, clientID, clientSecret string, opts ...Option) (func(htt
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.RequestURI[:len(o.Prefix)] == o.Prefix {
+			if len(r.RequestURI) >= len(o.Prefix) && r.RequestURI[:len(o.Prefix)] == o.Prefix {
 				h.ServeHTTP(w, r)
 				return
 			}
@@ -222,7 +224,7 @@ func prepareOptions(o *Options) error {
 		}
 	}
 
-	discoveryURI := strings.TrimSuffix(o.Issuer, "/") + ".well-known/openid-configuration"
+	discoveryURI := strings.TrimSuffix(o.Issuer, "/") + "/.well-known/openid-configuration"
 
 	res, err := o.Client.Get(discoveryURI)
 	if err != nil {
