@@ -94,7 +94,16 @@ func (o *Options) SignInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oauth2Token, err := o.Config.Exchange(r.Context(), r.FormValue("code"))
+	scheme := "https"
+	if r.TLS == nil {
+		scheme = "http"
+	}
+
+	oauth2Token, err := o.Config.Exchange(
+		r.Context(),
+		r.FormValue("code"),
+		oauth2.SetAuthURLParam("redirect_uri", fmt.Sprintf("%s://%s%s", scheme, r.Host, o.SignInCallbackPath)),
+	)
 	if err != nil {
 		o.ErrorLogger.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

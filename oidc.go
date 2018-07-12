@@ -125,7 +125,7 @@ func DefaultOptions() Options {
 			Timeout: 10 * time.Second,
 		},
 
-		ErrorLogger: log.New(os.Stderr, "oidc", log.LstdFlags),
+		ErrorLogger: log.New(os.Stderr, "oidc: ", log.Lshortfile | log.LUTC | log.LstdFlags),
 	}
 }
 
@@ -134,12 +134,11 @@ type authKey struct{}
 var key authKey
 
 // OpenIDConnect ...
-func OpenIDConnect(iss, clientID, clientSecret string, redirectURL string, opts ...Option) (func(http.Handler) http.Handler, error) {
+func OpenIDConnect(iss, clientID, clientSecret string, opts ...Option) (func(http.Handler) http.Handler, error) {
 	o := DefaultOptions()
 	o.Issuer = iss
 	o.Config.ClientID = clientID
 	o.Config.ClientSecret = clientSecret
-	o.Config.RedirectURL = redirectURL
 
 	for _, f := range opts {
 		f(&o)
@@ -160,7 +159,9 @@ func OpenIDConnect(iss, clientID, clientSecret string, redirectURL string, opts 
 
 			token, err := o.AuthCookie(w, r)
 			if err != nil {
-				o.ErrorLogger.Println(err)
+				if err != http.ErrNoCookie { // Only Log an Error, Lack of Auth Cookie is not an error
+					o.ErrorLogger.Println(err)
+				}
 				next.ServeHTTP(w, r)
 				return
 			}
