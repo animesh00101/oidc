@@ -140,7 +140,13 @@ func (o *Options) SignInCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := o.SetAuthCookie(w, r, oauth2Token); err != nil {
+	if err := o.SetAuthCookie(w, r, &Token{
+		IDToken: rawIDToken,
+		AccessToken: oauth2Token.AccessToken,
+		Expiry: oauth2Token.Expiry,
+		RefreshToken: oauth2Token.RefreshToken,
+		TokenType: oauth2Token.TokenType,
+	}); err != nil {
 		o.ErrorLogger.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -188,9 +194,8 @@ func (o *Options) SignOut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if token, err := o.AuthCookie(w, r); err == nil {
-		idToken, ok := token.Extra("id_token").(string)
-		if ok {
-			v.Set("id_token_hint", idToken)
+		if token.IDToken != "" {
+			v.Set("id_token_hint", token.IDToken)
 		}
 	}
 
@@ -206,7 +211,7 @@ func (o *Options) SignOut(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, buf.String(), http.StatusFound)
 }
 
-func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *oauth2.Token) error {
+func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *Token) error {
 	enc, err := securecookie.EncodeMulti(o.CookieOptions.Name, token, o.Codecs...)
 	if err != nil {
 		return err
@@ -226,13 +231,13 @@ func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *o
 	return nil
 }
 
-func (o *Options) AuthCookie(w http.ResponseWriter, r *http.Request) (*oauth2.Token, error) {
+func (o *Options) AuthCookie(w http.ResponseWriter, r *http.Request) (*Token, error) {
 	c, err := r.Cookie(o.CookieOptions.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	var token oauth2.Token
+	var token Token
 	if err := securecookie.DecodeMulti(o.CookieOptions.Name, c.Value, &token, o.Codecs...); err != nil {
 		return nil, err
 	}
@@ -290,4 +295,29 @@ type AuthHandler interface {
 
 	SignOut(http.ResponseWriter, *http.Request)
 	SignOutCallback(http.ResponseWriter, *http.Request)
+}
+
+type Token struct {
+	// AccessToken is the token that authorizes and authenticates
+	// the requests.
+	AccessToken string `json:"access_token"`
+
+	// TokenType is the type of token.
+	// The Type method returns either this or "Bearer", the default.
+	TokenType string `json:"token_type,omitempty"`
+
+	// RefreshToken is a token that's used by the application
+	// (as opposed to the user) to refresh the access token
+	// if it expires.
+	RefreshToken string `json:"refresh_token,omitempty"`
+
+	// Expiry is the optional expiration time of the access token.
+	//
+	// If zero, TokenSource implementations will reuse the same
+	// token forever and RefreshToken or equivalent
+	// mechanisms for that TokenSource will not be used.
+	Expiry time.Time `json:"expiry,omitempty"`
+
+	// IDToken is the OpenID addition to the excellent OAuth 2.0
+	IDToken string `json:"id_token,omitempty"`
 }
