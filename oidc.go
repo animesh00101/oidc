@@ -173,8 +173,8 @@ func OpenIDConnect(iss, clientID, clientSecret string, opts ...Option) (func(htt
 	}, nil
 }
 
-func FromContext(ctx context.Context) *oauth2.Token {
-	if t, ok := ctx.Value(&key).(*oauth2.Token); ok {
+func FromContext(ctx context.Context) *Token {
+	if t, ok := ctx.Value(&key).(*Token); ok {
 		return t
 	}
 
