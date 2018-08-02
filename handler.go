@@ -7,7 +7,6 @@ import (
 	"github.com/coreos/go-oidc"
 	"golang.org/x/oauth2"
 	"fmt"
-	"encoding/gob"
 	"github.com/gorilla/securecookie"
 	"net/url"
 	"strings"
@@ -18,10 +17,6 @@ const (
 	stateKey = "state"
 	nonceKey = "nonce"
 )
-
-func init() {
-	gob.Register(&oauth2.Token{})
-}
 
 func handlerFromOptions(opt *Options) http.Handler {
 	mux := http.NewServeMux()
@@ -141,11 +136,11 @@ func (o *Options) SignInCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := o.SetAuthCookie(w, r, &Token{
-		IDToken: rawIDToken,
-		AccessToken: oauth2Token.AccessToken,
-		Expiry: oauth2Token.Expiry,
+		IDToken:      rawIDToken,
+		AccessToken:  oauth2Token.AccessToken,
+		Expiry:       oauth2Token.Expiry,
 		RefreshToken: oauth2Token.RefreshToken,
-		TokenType: oauth2Token.TokenType,
+		TokenType:    oauth2Token.TokenType,
 	}); err != nil {
 		o.ErrorLogger.Println(err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -172,7 +167,8 @@ func (o *Options) SignOutCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o.PostSignInRedirectHandler.ServeHTTP(w, r)
+	o.RemoveAuthCookie(w)
+	o.PostSignOutRedirectHandler.ServeHTTP(w, r)
 }
 
 func (o *Options) SignOut(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +204,7 @@ func (o *Options) SignOut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	buf.WriteString(v.Encode())
+	o.RemoveAuthCookie(w)
 	http.Redirect(w, r, buf.String(), http.StatusFound)
 }
 
