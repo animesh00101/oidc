@@ -246,6 +246,8 @@ func (o *Options) RemoveAuthCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:   o.CookieOptions.Name,
 		MaxAge: -1,
+		Domain: o.CookieOptions.Domain,
+		Path: o.CookieOptions.Path,
 	})
 }
 
