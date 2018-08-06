@@ -112,7 +112,7 @@ func DefaultOptions() Options {
 		CookieOptions: CookieOptions{
 			Name:   "oidc",
 			Path:   "/",
-			MaxAge: 60 * 60,
+			MaxAge: 60 * 60 * 24 * 30,
 		},
 
 		Config: oauth2.Config{
