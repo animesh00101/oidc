@@ -103,7 +103,8 @@ func DefaultOptions() Options {
 		ResponseType: "code id_token",
 
 		CookieOptions: CookieOptions{
-			Name:   "oidc",
+			Name: "oidc",
+			Path: "/",
 		},
 
 		Config: oauth2.Config{
@@ -119,10 +120,6 @@ func DefaultOptions() Options {
 		ErrorLogger: log.New(os.Stderr, "oidc: ", 0),
 	}
 }
-
-type authKey struct{}
-
-var key authKey
 
 // OpenIDConnect ...
 func OpenIDConnect(iss, clientID, clientSecret string, opts ...Option) (func(http.Handler) http.Handler, error) {
