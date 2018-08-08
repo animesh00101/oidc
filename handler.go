@@ -214,7 +214,7 @@ func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *T
 		MaxAge:   o.CookieOptions.MaxAge,
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
-		Expires:  o.CookieOptions.Expires,
+		Expires:  token.Expiry,
 		Domain:   o.CookieOptions.Domain,
 		Path:     o.CookieOptions.Path,
 	})
