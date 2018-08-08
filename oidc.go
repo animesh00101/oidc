@@ -55,8 +55,6 @@ type Options struct {
 
 	Client http.Client
 
-	Codecs []securecookie.Codec
-
 	ErrorLogger *log.Logger
 
 	TempCodec         securecookie.Codec
@@ -94,15 +92,10 @@ func DefaultOptions() Options {
 		SignInCallbackPath:  "/oidc/sign-in-oidc",
 		SignOutCallbackPath: "/oidc/sign-out-oidc",
 
-		Codecs: securecookie.CodecsFromPairs(
+		TempCodec: securecookie.New(
 			[]byte("development-credentials-hash----"),
-			[]byte("development-credentials-block---"),
+			nil,
 		),
-
-		TempCodec: securecookie.CodecsFromPairs(
-			[]byte("development-credentials-hash----"),
-			[]byte("development-credentials-block---"),
-		)[0],
 
 		RedirectionMaxAge: 5 * 60,
 
@@ -111,8 +104,6 @@ func DefaultOptions() Options {
 
 		CookieOptions: CookieOptions{
 			Name:   "oidc",
-			Path:   "/",
-			MaxAge: 60 * 60 * 24 * 30,
 		},
 
 		Config: oauth2.Config{
@@ -125,7 +116,7 @@ func DefaultOptions() Options {
 			Timeout: 10 * time.Second,
 		},
 
-		ErrorLogger: log.New(os.Stderr, "oidc: ", log.Lshortfile | log.LUTC | log.LstdFlags),
+		ErrorLogger: log.New(os.Stderr, "oidc: ", 0),
 	}
 }
 
@@ -157,28 +148,9 @@ func OpenIDConnect(iss, clientID, clientSecret string, opts ...Option) (func(htt
 				return
 			}
 
-			token, err := o.AuthCookie(w, r)
-			if err != nil {
-				if err != http.ErrNoCookie { // Only Log an Error, Lack of Auth Cookie is not an error
-					o.ErrorLogger.Println(err)
-				}
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			r = r.WithContext(context.WithValue(r.Context(), &key, token))
-
 			next.ServeHTTP(w, r)
 		})
 	}, nil
-}
-
-func FromContext(ctx context.Context) *Token {
-	if t, ok := ctx.Value(&key).(*Token); ok {
-		return t
-	}
-
-	return nil
 }
 
 func Must(h func(http.Handler) http.Handler, err error) func(http.Handler) http.Handler {
@@ -217,12 +189,6 @@ func prepareOptions(o *Options) error {
 
 	if s, ok := o.TempCodec.(*securecookie.SecureCookie); ok {
 		s.MaxAge(o.RedirectionMaxAge)
-	}
-
-	for _, s := range o.Codecs {
-		if cookie, ok := s.(*securecookie.SecureCookie); ok {
-			cookie.MaxAge(o.CookieOptions.MaxAge)
-		}
 	}
 
 	discoveryURI := strings.TrimSuffix(o.Issuer, "/") + "/.well-known/openid-configuration"

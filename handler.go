@@ -7,7 +7,6 @@ import (
 	"github.com/coreos/go-oidc"
 	"golang.org/x/oauth2"
 	"fmt"
-	"github.com/gorilla/securecookie"
 	"net/url"
 	"strings"
 	"bytes"
@@ -209,14 +208,9 @@ func (o *Options) SignOut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *Token) error {
-	enc, err := securecookie.EncodeMulti(o.CookieOptions.Name, token, o.Codecs...)
-	if err != nil {
-		return err
-	}
-
 	http.SetCookie(w, &http.Cookie{
 		Name:     o.CookieOptions.Name,
-		Value:    enc,
+		Value:    token.AccessToken,
 		MaxAge:   o.CookieOptions.MaxAge,
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
@@ -224,6 +218,18 @@ func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *T
 		Domain:   o.CookieOptions.Domain,
 		Path:     o.CookieOptions.Path,
 	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "sign_out",
+		Value:    token.IDToken,
+		Expires:  token.Expiry,
+		Path:     o.SignOutPath,
+		Domain:   o.CookieOptions.Domain,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+	})
+
+	// TODO: Something About Refresh Token
 
 	return nil
 }
@@ -234,12 +240,17 @@ func (o *Options) AuthCookie(w http.ResponseWriter, r *http.Request) (*Token, er
 		return nil, err
 	}
 
-	var token Token
-	if err := securecookie.DecodeMulti(o.CookieOptions.Name, c.Value, &token, o.Codecs...); err != nil {
-		return nil, err
+	idc, err := r.Cookie("sign_out")
+	if err != nil {
+		idc = &http.Cookie{
+			Value: "",
+		}
 	}
 
-	return &token, nil
+	return &Token{
+		AccessToken: c.Value,
+		IDToken:     idc.Value,
+	}, nil
 }
 
 func (o *Options) RemoveAuthCookie(w http.ResponseWriter) {
@@ -247,7 +258,7 @@ func (o *Options) RemoveAuthCookie(w http.ResponseWriter) {
 		Name:   o.CookieOptions.Name,
 		MaxAge: -1,
 		Domain: o.CookieOptions.Domain,
-		Path: o.CookieOptions.Path,
+		Path:   o.CookieOptions.Path,
 	})
 }
 
