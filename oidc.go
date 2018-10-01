@@ -97,7 +97,7 @@ func DefaultOptions() Options {
 			nil,
 		),
 
-		RedirectionMaxAge: 5 * 60,
+		RedirectionMaxAge: 25 * 60,
 
 		ResponseMode: ResponseModeFormPost,
 		ResponseType: "code id_token",
