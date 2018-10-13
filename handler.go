@@ -73,7 +73,7 @@ func (o *Options) SignInCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == http.ErrNoCookie {
 			o.ErrorLogger.Println("state cookie not found")
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
 
@@ -84,7 +84,7 @@ func (o *Options) SignInCallback(w http.ResponseWriter, r *http.Request) {
 
 	if state != recState {
 		o.ErrorLogger.Println("state mismatch, received state:", recState, "expected state:", state)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (o *Options) SignInCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == http.ErrNoCookie {
 			o.ErrorLogger.Println("nonce cookie not found")
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
 
@@ -162,7 +162,7 @@ func (o *Options) SignOutCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if recState != state {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 
