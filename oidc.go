@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"github.com/pkg/errors"
 	"net/http"
 	"time"
 
@@ -161,7 +162,7 @@ func Must(h func(http.Handler) http.Handler, err error) func(http.Handler) http.
 func prepareOptions(o *Options) error {
 	provider, err := oidc.NewProvider(context.Background(), o.Issuer)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Provider error")
 	}
 
 	o.Config.Endpoint = provider.Endpoint()
@@ -192,7 +193,7 @@ func prepareOptions(o *Options) error {
 
 	res, err := o.Client.Get(discoveryURI)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Discovery Error")
 	}
 	defer res.Body.Close()
 
@@ -201,7 +202,7 @@ func prepareOptions(o *Options) error {
 	}
 
 	if err := json.NewDecoder(res.Body).Decode(&discoResp); err != nil {
-		return err
+		return errors.Wrap(err, "Decode Error")
 	}
 
 	o.LogoutURI = discoResp.EndSessionURI
