@@ -1,15 +1,15 @@
 package oidc
 
 import (
-	"net/http"
-	"github.com/google/uuid"
-	"time"
-	"github.com/coreos/go-oidc"
-	"golang.org/x/oauth2"
+	"bytes"
 	"fmt"
+	"github.com/coreos/go-oidc"
+	"github.com/google/uuid"
+	"golang.org/x/oauth2"
+	"net/http"
 	"net/url"
 	"strings"
-	"bytes"
+	"time"
 )
 
 const (
@@ -53,12 +53,23 @@ func (o *Options) SignIn(w http.ResponseWriter, r *http.Request) {
 		scheme = "http"
 	}
 
-	authCodeUrl := o.Config.AuthCodeURL(
-		state,
+	authOptions := make([]oauth2.AuthCodeOption, 0, 4+len(r.URL.Query()))
+
+	authOptions = append(authOptions,
 		oidc.Nonce(nonce),
 		oauth2.SetAuthURLParam("response_type", o.ResponseType),
 		oauth2.SetAuthURLParam("response_mode", o.ResponseMode),
 		oauth2.SetAuthURLParam("redirect_uri", fmt.Sprintf("%s://%s%s", scheme, r.Host, o.SignInCallbackPath)),
+	)
+
+	for key := range r.URL.Query() {
+		val := r.URL.Query().Get(key)
+		authOptions = append(authOptions, oauth2.SetAuthURLParam(key, val))
+	}
+
+	authCodeUrl := o.Config.AuthCodeURL(
+		state,
+		authOptions...,
 	)
 
 	http.Redirect(w, r, authCodeUrl, http.StatusFound)
