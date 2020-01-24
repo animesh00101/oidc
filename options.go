@@ -15,3 +15,9 @@ func WithPostSignInHandlerFunc(h func(w http.ResponseWriter, r *http.Request)) O
 		o.PostSignInRedirectHandler = http.HandlerFunc(h)
 	}
 }
+
+func WithCookieOptions(c CookieOptions) Option {
+	return func(o *Options) {
+		o.CookieOptions = c
+	}
+}

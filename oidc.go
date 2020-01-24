@@ -69,11 +69,12 @@ type Options struct {
 
 // CookieOptions is the various cookie options that are configurable for the identity cookie
 type CookieOptions struct {
-	Name    string // Default: oidc
-	Expires time.Time
-	MaxAge  int
-	Domain  string
-	Path    string
+	Name     string // Default: oidc
+	Expires  time.Time
+	MaxAge   int
+	Domain   string
+	Path     string
+	SameSite http.SameSite
 }
 
 // Option is the type used to modify the default Options
@@ -103,10 +104,7 @@ func DefaultOptions() Options {
 		ResponseMode: ResponseModeFormPost,
 		ResponseType: "code id_token",
 
-		CookieOptions: CookieOptions{
-			Name: "oidc",
-			Path: "/",
-		},
+		CookieOptions: DefaultCookieOptions(),
 
 		Config: oauth2.Config{
 			Scopes: []string{oidc.ScopeOpenID, "profile"},
@@ -119,6 +117,14 @@ func DefaultOptions() Options {
 		},
 
 		ErrorLogger: log.New(os.Stderr, "oidc: ", 0),
+	}
+}
+
+func DefaultCookieOptions() CookieOptions {
+	return CookieOptions{
+		Name:     "oidc",
+		Path:     "/",
+		SameSite: http.SameSiteNoneMode,
 	}
 }
 
