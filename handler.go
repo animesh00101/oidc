@@ -228,6 +228,7 @@ func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *T
 		Expires:  o.CookieOptions.Expires,
 		Domain:   o.CookieOptions.Domain,
 		Path:     o.CookieOptions.Path,
+		SameSite: o.CookieOptions.SameSite,
 	})
 
 	http.SetCookie(w, &http.Cookie{
