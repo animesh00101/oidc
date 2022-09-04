@@ -1,9 +1,10 @@
 package oidc
 
 import (
-	"github.com/pkg/errors"
 	"net/http"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"context"
 	"encoding/json"
@@ -11,7 +12,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/coreos/go-oidc"
 	"github.com/gorilla/securecookie"
 	"golang.org/x/oauth2"
 )
@@ -107,7 +107,7 @@ func DefaultOptions() Options {
 		CookieOptions: DefaultCookieOptions(),
 
 		Config: oauth2.Config{
-			Scopes: []string{oidc.ScopeOpenID, "profile"},
+			Scopes: []string{oidc.ScopeOpenID, "profile", "offline_access"},
 		},
 
 		NotFoundHandler: http.NotFoundHandler(),
