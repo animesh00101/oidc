@@ -2,14 +2,19 @@ package oidc
 
 import (
 	"bytes"
+	"encoding/json"
+
+	
 	"fmt"
-	"github.com/coreos/go-oidc"
-	"github.com/google/uuid"
-	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/coreos/go-oidc"
+	"github.com/google/uuid"
+	"golang.org/x/oauth2"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -25,6 +30,8 @@ func handlerFromOptions(opt *Options) http.Handler {
 
 	mux.HandleFunc(opt.SignOutPath, opt.AuthHandler.SignOut)
 	mux.HandleFunc(opt.SignOutCallbackPath, opt.AuthHandler.SignOutCallback)
+
+	mux.HandleFunc(opt.RenewTokenPath, opt.AuthHandler.RenewAccessToken)
 
 	mux.Handle("/", opt.NotFoundHandler)
 
@@ -59,6 +66,7 @@ func (o *Options) SignIn(w http.ResponseWriter, r *http.Request) {
 		oidc.Nonce(nonce),
 		oauth2.SetAuthURLParam("response_type", o.ResponseType),
 		oauth2.SetAuthURLParam("response_mode", o.ResponseMode),
+		oauth2.SetAuthURLParam("access_type", "offline"),
 		oauth2.SetAuthURLParam("redirect_uri", fmt.Sprintf("%s://%s%s", scheme, r.Host, o.SignInCallbackPath)),
 	)
 
@@ -73,6 +81,97 @@ func (o *Options) SignIn(w http.ResponseWriter, r *http.Request) {
 	)
 
 	http.Redirect(w, r, authCodeUrl, http.StatusFound)
+}
+
+func (o *Options) RenewAccessToken(w http.ResponseWriter, r *http.Request){
+
+	ctx := r.Context()
+
+	
+	// check if oidc cookie is present
+	oidc, err := r.Cookie("oidc")
+	if err != nil || oidc == nil {
+		//eLog := fmt.Sprintf("error in RenewAccessToken : %v", err.Error())
+		//ctxzap.Extract(ctx).Error(eLog)
+		//ReturnResponse(ctx, w, "Invalid Session", http.StatusBadRequest)
+		http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return
+	}
+
+	refresh_token, err := r.Cookie("refresh_token")
+	if err != nil || oidc == nil {
+		//eLog := fmt.Sprintf("error in RenewAccessToken : %v", err.Error())
+		//ctxzap.Extract(ctx).Error(eLog)
+		//ReturnResponse(ctx, w, "Invalid Session", http.StatusBadRequest)
+		http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return
+	}
+
+
+	restoredToken := &oauth2.Token{
+		AccessToken:  oidc.Value,
+		RefreshToken: refresh_token.Value,
+		Expiry:       time.Now().Add(time.Minute * -1),
+	}
+
+	
+	requestGroup := singleflight.Group{}
+	v, err, shared := requestGroup.Do(refresh_token.Value, func() (interface{}, error) {
+		tokenSource := o.Config.TokenSource(ctx, restoredToken)
+		return tokenSource.Token()
+	})
+
+	//Todo :handling shared eccess to token
+	if shared {
+		//eLog := fmt.Sprintf("concurrent call to RenewAccessToken : Refresh Token : %v : This was used twice.", sessionObj.RefreshToken)
+		//ctxzap.Extract(ctx).Warn(eLog)
+	}
+
+	//Todo : logging more specific error
+	if err != nil {
+		if rErr, ok := err.(*oauth2.RetrieveError); ok {
+			responseError := map[string]interface{}{}
+			if err := json.Unmarshal(rErr.Body, &responseError); err != nil {
+				return
+				//eLog := fmt.Sprintf("error in RenewAccessToken Unmarshal Response : %v", string(rErr.Body))
+				//ctxzap.Extract(ctx).Error(eLog)
+			}
+		}
+		http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return
+	}
+
+	newToken := v.(*oauth2.Token)
+
+	rawIDToken, ok := newToken.Extra("id_token").(string)
+	if !ok {
+		http.Error(w, "No id_token field in oauth2 token.", http.StatusInternalServerError)
+		http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return
+	}
+
+	// _, err = o.IDTokenVerifier.Verify(r.Context(), rawIDToken)
+	// if err != nil {
+	// 	return errors.New("id token : error in verifying id token")
+	// }
+
+
+	if err := o.SetAuthCookie(w, r, &Token{
+		IDToken:      rawIDToken,
+		AccessToken:  newToken.AccessToken,
+		Expiry:       newToken.Expiry,
+		RefreshToken: newToken.RefreshToken,
+		TokenType:    newToken.TokenType,
+	}); err != nil {
+		o.ErrorLogger.Println(err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return
+	}
+
+	http.Redirect(w,r,"/",http.StatusFound)
+	//http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	return
 }
 
 func (o *Options) SignInCallback(w http.ResponseWriter, r *http.Request) {
@@ -241,6 +340,19 @@ func (o *Options) SetAuthCookie(w http.ResponseWriter, r *http.Request, token *T
 		Secure:   r.TLS != nil,
 	})
 
+	//Todo: need to enocde this cookie value 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    token.RefreshToken,
+		Expires:  time.Now().Add(time.Hour * 200),
+		Path:     o.CookieOptions.Path,
+		Domain:   o.CookieOptions.Domain,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+	})
+
+
+
 	// TODO: Something About Refresh Token
 
 	return nil
@@ -311,12 +423,106 @@ func (o *Options) decryptTempFromCookie(w http.ResponseWriter, r *http.Request, 
 	return value, nil
 }
 
+
+func (o *Options) RenewAccessTokenCall(w http.ResponseWriter, r *http.Request) (error,string){
+
+	ctx := r.Context()
+
+	
+	// check if oidc cookie is present
+	oidc, err := r.Cookie("oidc")
+	if err != nil || oidc == nil {
+		//eLog := fmt.Sprintf("error in RenewAccessToken : %v", err.Error())
+		//ctxzap.Extract(ctx).Error(eLog)
+		//ReturnResponse(ctx, w, "Invalid Session", http.StatusBadRequest)
+		//http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return err,""
+	}
+
+	refresh_token, err := r.Cookie("refresh_token")
+	if err != nil || oidc == nil {
+		//eLog := fmt.Sprintf("error in RenewAccessToken : %v", err.Error())
+		//ctxzap.Extract(ctx).Error(eLog)
+		//ReturnResponse(ctx, w, "Invalid Session", http.StatusBadRequest)
+		http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return err,""
+	}
+
+
+	restoredToken := &oauth2.Token{
+		AccessToken:  oidc.Value,
+		RefreshToken: refresh_token.Value,
+		Expiry:       time.Now().Add(time.Minute * -1),
+	}
+
+	
+	requestGroup := singleflight.Group{}
+	v, err, shared := requestGroup.Do(refresh_token.Value, func() (interface{}, error) {
+		tokenSource := o.Config.TokenSource(ctx, restoredToken)
+		return tokenSource.Token()
+	})
+
+	//Todo :handling shared eccess to token
+	if shared {
+		//eLog := fmt.Sprintf("concurrent call to RenewAccessToken : Refresh Token : %v : This was used twice.", sessionObj.RefreshToken)
+		//ctxzap.Extract(ctx).Warn(eLog)
+	}
+
+	//Todo : logging more specific error
+	if err != nil {
+		if rErr, ok := err.(*oauth2.RetrieveError); ok {
+			responseError := map[string]interface{}{}
+			if err := json.Unmarshal(rErr.Body, &responseError); err != nil {
+				return err,""
+				//eLog := fmt.Sprintf("error in RenewAccessToken Unmarshal Response : %v", string(rErr.Body))
+				//ctxzap.Extract(ctx).Error(eLog)
+			}
+		}
+		//http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return err,""
+	}
+
+	newToken := v.(*oauth2.Token)
+
+	rawIDToken, ok := newToken.Extra("id_token").(string)
+	if !ok {
+		http.Error(w, "No id_token field in oauth2 token.", http.StatusInternalServerError)
+		//http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return err,""
+	}
+
+	// _, err = o.IDTokenVerifier.Verify(r.Context(), rawIDToken)
+	// if err != nil {
+	// 	return errors.New("id token : error in verifying id token")
+	// }
+
+
+	if err := o.SetAuthCookie(w, r, &Token{
+		IDToken:      rawIDToken,
+		AccessToken:  newToken.AccessToken,
+		Expiry:       newToken.Expiry,
+		RefreshToken: newToken.RefreshToken,
+		TokenType:    newToken.TokenType,
+	}); err != nil {
+		o.ErrorLogger.Println(err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		//http.Redirect(w, r, "/oidc/sign-in", http.StatusFound)
+		return err,""
+	}
+
+	//http.Redirect(w,r,"/",http.StatusFound)
+	//http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	return err,newToken.AccessToken
+}
+
 type AuthHandler interface {
 	SignIn(http.ResponseWriter, *http.Request)
 	SignInCallback(http.ResponseWriter, *http.Request)
 
 	SignOut(http.ResponseWriter, *http.Request)
 	SignOutCallback(http.ResponseWriter, *http.Request)
+
+	RenewAccessToken(http.ResponseWriter, *http.Request)
 }
 
 type Token struct {

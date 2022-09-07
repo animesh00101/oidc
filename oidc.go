@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/coreos/go-oidc"
 	"github.com/gorilla/securecookie"
 	"golang.org/x/oauth2"
 )
@@ -43,6 +44,7 @@ type Options struct {
 	PostSignInRedirect  string
 	PostSignOutRedirect string
 
+	RenewTokenPath string
 	ResponseType string
 	ResponseMode ResponseMode
 
@@ -88,6 +90,8 @@ func DefaultOptions() Options {
 		SignInPath:  "/oidc/sign-in",
 		SignOutPath: "/oidc/sign-out",
 
+		
+		RenewTokenPath: "/oidc/renew",
 		PostSignOutRedirect: "/",
 		PostSignInRedirect:  "/",
 
