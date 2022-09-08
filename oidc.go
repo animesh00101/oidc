@@ -44,7 +44,7 @@ type Options struct {
 	PostSignInRedirect  string
 	PostSignOutRedirect string
 
-	RenewTokenPath string
+
 	ResponseType string
 	ResponseMode ResponseMode
 
@@ -91,7 +91,6 @@ func DefaultOptions() Options {
 		SignOutPath: "/oidc/sign-out",
 
 		
-		RenewTokenPath: "/oidc/renew",
 		PostSignOutRedirect: "/",
 		PostSignInRedirect:  "/",
 
