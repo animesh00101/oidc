@@ -2,7 +2,6 @@ package oidc
 
 import (
 	"bytes"
-	"encoding/json"
 
 	"fmt"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	"github.com/coreos/go-oidc"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
-	"golang.org/x/sync/singleflight"
 )
 
 const (
